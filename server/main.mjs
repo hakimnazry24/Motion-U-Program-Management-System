@@ -4,6 +4,7 @@ import cors from "cors";
 const app = express();
 const db = new sqlite3.Database("./database.db");
 import "dotenv/config";
+import bcrypt from "bcrypt";
 
 app.use(cors());
 app.use(express.json());
@@ -33,9 +34,13 @@ db.serialize(() => {
     )`);
 
   db.run(
-    "CREATE TABLE IF NOT EXISTS User (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL)"
+    "CREATE TABLE IF NOT EXISTS User (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, password TEXT NOT NULL, admin INTEGER NOT NULL)"
   );
-  // db.run("INSERT INTO User (username, password, role) VALUES (?,?,?)", ["johndoe", "johndoe123", "program_mainboard"]);
+  db.run("INSERT INTO User (username, password, admin) VALUES (?,?,?)", [
+    "admin",
+    "admin",
+    1,
+  ]);
   // db.run("insert into Almanac (year) VALUES (2021)");
   // db.run("INSERT INTO Program (name, program_manager_name, program_manager_phone, budget, proposal_link, ppf_link, date, duration, venue, total_participants, program_status, sidenotes, year) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", ["Program 1", "Manager 1", "1234567890", 100000, "https://www.google.com", "https://www.google.com", "2021-01-01", 5, "Venue 1", 100, "Completed", "Sidenotes 1", 2021]);
   // db.run("INSERT INTO Program (name, program_manager_name, program_manager_phone, budget, proposal_link, ppf_link, date, duration, venue, total_participants, program_status, sidenotes, year) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", ["Program 2", "Manager 2", "1234567890", 200000, "https://www.google.com", "https://www.google.com", "2021-01-01", 5, "Venue 2", 200, "Completed", "Sidenotes 2", 2021]);
@@ -52,34 +57,17 @@ app.delete("/api/program", (req, res) => {
   const { programId } = req.body;
   db.run("DELETE FROM Program WHERE id = ?", [programId], (err) => {
     if (err) {
-      res.sendStatus(500)
+      res.sendStatus(500);
       return;
-    } 
+    }
   });
-  console.log("foo")
-  return res.sendStatus(200)
+  console.log("foo");
+  return res.sendStatus(200);
 });
 
 app.post("/api/program", (req, res) => {
-  const {
-    name,
-    program_manager_name,
-    program_manager_phone,
-    budget,
-    proposal_link,
-    ppf_link,
-    date,
-    duration,
-    venue,
-    total_participants,
-    program_status,
-    sidenotes,
-    year,
-  } = req.body;
-  console.log(req.body);
-  db.run(
-    "INSERT INTO Program (name, program_manager_name, program_manager_phone, budget, proposal_link, ppf_link, date, duration, venue, total_participants, program_status, sidenotes, year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [
+  {
+    const {
       name,
       program_manager_name,
       program_manager_phone,
@@ -93,23 +81,40 @@ app.post("/api/program", (req, res) => {
       program_status,
       sidenotes,
       year,
-    ],
-    (err) => {
-      if (err) {
-        return res.status(500).send({ error: err.message });
+    } = req.body;
+    console.log(req.body);
+    db.run(
+      "INSERT INTO Program (name, program_manager_name, program_manager_phone, budget, proposal_link, ppf_link, date, duration, venue, total_participants, program_status, sidenotes, year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        name,
+        program_manager_name,
+        program_manager_phone,
+        budget,
+        proposal_link,
+        ppf_link,
+        date,
+        duration,
+        venue,
+        total_participants,
+        program_status,
+        sidenotes,
+        year,
+      ],
+      (err) => {
+        if (err) {
+          return res.sendStatus(500);
+        }
+        return res.sendStatus(200);
       }
-      return res
-        .status(200)
-        .send({ message: `Successfully adding program ${name}` });
-    }
-  );
+    );
+  }
 });
 
 app.get("/api/program/:id", (req, res) => {
   const id = req.params.id;
   db.get(`SELECT * FROM Program WHERE id = ?`, [id], (err, row) => {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      return res.sendStatus(500);
     }
     res.json(row);
   });
@@ -119,7 +124,7 @@ app.get("/api/programs/:year", (req, res) => {
   const year = req.params.year;
   db.all(`SELECT * FROM Program WHERE year = ?`, [year], (err, rows) => {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      return res.sendStatus(500);
     }
     res.json(rows);
   });
@@ -128,18 +133,44 @@ app.get("/api/programs/:year", (req, res) => {
 app.post("/api/auth", (req, res) => {
   const { username, password } = req.body;
   db.get(
-    `SELECT * FROM User WHERE username = ? AND password = ?`,
-    [username, password],
+    `SELECT * FROM User WHERE username = ?`,
+    [username],
     (err, row) => {
       if (err) {
-        return res.status(500).json({ error: err.message });
+        console.log(err.message);
+        return res.sendStatus(500);
       }
       if (row) {
-        return res.json({ username: row.username, role: row.role });
+        const hashedPassword = row.password;
+        bcrypt.compare(password, hashedPassword, (err, result) => {
+          if (result == true) {
+            return res.sendStatus(200);
+          } else {
+            return res.sendStatus(404);
+          }
+        });
       }
-      return res.status(401).json({ error: "Invalid credentials" });
     }
   );
+});
+
+app.post("/api/create-user", (req, res) => {
+  const { username, password, admin } = req.body;
+  const saltRounds = 10;
+  bcrypt.hash(password, saltRounds, (err, hash) => {
+    if (err) return res.send({ error: err.message });
+    db.run(
+      "INSERT INTO User (username, password, admin) VALUES (?, ?, ?)",
+      [username, hash, admin],
+      (err) => {
+        if (err) {
+          console.log(err.message);
+          return res.sendStatus(500);
+        }
+        return res.sendStatus(200);
+      }
+    );
+  });
 });
 
 app.listen(process.env.NODE_PORT, () => {

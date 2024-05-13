@@ -34,7 +34,6 @@ export default function AddProgramPage() {
     };
 
     try {
-      console.log(JSON.stringify(data));
       fetch("http://localhost:8081/api/program", {
         method: "post",
         body: JSON.stringify(data),

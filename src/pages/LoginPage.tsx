@@ -1,33 +1,43 @@
-import process from "process";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const navigate = useNavigate();
 
-  async function auth(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault;
-    const credential = { username: username, password: password };
-    const req = await fetch(`http://localhost:8081/api/auth`, {
-      method: "post",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(credential),
-    });
-
-    const res = await req.body;
-    console.log(res);
+  async function auth(e: any) {
+    try {
+      e.preventDefault();
+      const credential = { username: username, password: password };
+      const res = await fetch(`http://localhost:8081/api/auth`, {
+        method: "post",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(credential),
+      });
+      if (res.status == 200) {
+        return navigate("/program-manager-dashboard");
+      } else if (res.status == 404) {
+        window.alert("User not found");
+      } else {
+        window.alert("Something is wrong");
+      }
+    } catch (err: any) {
+      window.alert(err.message);
+    }
   }
   return (
     <>
       <div className="flex items-center text-center w-60 mx-auto h-screen">
         <form
-          onSubmit={(e) => auth(e)}
+          onSubmit={auth}
           className="flex flex-col h-fit shadow-blue-200 shadow-md rounded-2xl p-5"
         >
           <h1 className="text-lg font-semibold mb-5">Login</h1>
           <input
+            required
             type="text"
             name="username"
             id="username"
@@ -36,6 +46,7 @@ export default function LoginPage() {
             className="block mb-3 p-3 rounded-xl"
           />
           <input
+            required
             type="password"
             name="password"
             id="password"
